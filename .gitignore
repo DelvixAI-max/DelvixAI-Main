@@ -5,6 +5,13 @@
 *.xlsx
 *.csv
 
+# Video footage / clips (large binaries, not source)
+afl_tribunal_automation/sample_footage/
+*.mp4
+*.mov
+*.mkv
+*.ts
+
 # Python
 __pycache__/
 *.py[cod]
