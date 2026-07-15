@@ -1,5 +1,9 @@
 """Command-line entrypoints for every stage.
 
+    python cli.py add-game --season 2026 --round R18 --home-team Richmond --away-team Carlton \\
+        --q1 /videos/q1.mp4 --q2 /videos/q2.mp4 --q3 /videos/q3.mp4 --q4 /videos/q4.mp4 \\
+        --clock-box 1700,40,160,50
+    python cli.py preview-frame --video /videos/q1.mp4 --timestamp 10 --output frame.jpg
     python cli.py sync-clock --game-id 1
     python cli.py detect-candidates --game-id 1
     python cli.py extract-clips --game-id 1
@@ -15,7 +19,51 @@ import argparse
 import json
 import sys
 
-from db.models import Candidate, Clip, SessionLocal
+from db.models import Candidate, Clip, Game, SessionLocal
+
+
+def cmd_add_game(args: argparse.Namespace) -> None:
+    x, y, w, h = (int(v) for v in args.clock_box.split(","))
+
+    broadcast_paths = {}
+    for quarter, path in ((1, args.q1), (2, args.q2), (3, args.q3), (4, args.q4)):
+        if path:
+            broadcast_paths[str(quarter)] = path
+
+    coaches_paths = {}
+    for quarter, path in ((1, args.coaches_q1), (2, args.coaches_q2), (3, args.coaches_q3), (4, args.coaches_q4)):
+        if path:
+            coaches_paths[str(quarter)] = path
+
+    session = SessionLocal()
+    try:
+        game = Game(
+            season=args.season,
+            round=args.round,
+            home_team=args.home_team,
+            away_team=args.away_team,
+            ground=args.ground or "",
+            broadcast_video_paths=broadcast_paths,
+            coaches_angle_video_paths=coaches_paths,
+            clock_crop_box={"x": x, "y": y, "w": w, "h": h},
+        )
+        session.add(game)
+        session.commit()
+        session.refresh(game)
+        print(f"Created game {game.id}: {game.home_team} vs {game.away_team} ({len(broadcast_paths)} quarters)")
+    finally:
+        session.close()
+
+
+def cmd_preview_frame(args: argparse.Namespace) -> None:
+    """Pull a single frame so you can find the clock's crop box (x,y,w,h)
+    by eye before running sync-clock — open the frame in any image viewer,
+    note the pixel rectangle around the on-screen clock, and pass it as
+    --clock-box to add-game."""
+    from common.ffmpeg_utils import extract_frame_at
+
+    path = extract_frame_at(args.video, args.timestamp, args.output)
+    print(f"Wrote {path} — open it and measure the clock's pixel box (x,y,w,h).")
 
 
 def cmd_sync_clock(args: argparse.Namespace) -> None:
@@ -114,6 +162,29 @@ def cmd_ingest_umpire_report(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    p = subparsers.add_parser("add-game", help="Register a game and its quarter video paths")
+    p.add_argument("--season", type=int, required=True)
+    p.add_argument("--round", type=str, required=True)
+    p.add_argument("--home-team", type=str, required=True)
+    p.add_argument("--away-team", type=str, required=True)
+    p.add_argument("--ground", type=str, default="")
+    p.add_argument("--q1", type=str, default=None)
+    p.add_argument("--q2", type=str, default=None)
+    p.add_argument("--q3", type=str, default=None)
+    p.add_argument("--q4", type=str, default=None)
+    p.add_argument("--coaches-q1", type=str, default=None)
+    p.add_argument("--coaches-q2", type=str, default=None)
+    p.add_argument("--coaches-q3", type=str, default=None)
+    p.add_argument("--coaches-q4", type=str, default=None)
+    p.add_argument("--clock-box", type=str, required=True, help="x,y,w,h pixel crop box for the on-screen clock")
+    p.set_defaults(func=cmd_add_game)
+
+    p = subparsers.add_parser("preview-frame", help="Extract one frame to help find the clock's crop box")
+    p.add_argument("--video", type=str, required=True)
+    p.add_argument("--timestamp", type=float, required=True)
+    p.add_argument("--output", type=str, required=True)
+    p.set_defaults(func=cmd_preview_frame)
 
     p = subparsers.add_parser("sync-clock", help="Stage 0: build clock sync table for a game")
     p.add_argument("--game-id", type=int, required=True)
