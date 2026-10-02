@@ -23,6 +23,14 @@ class CandidateWindow:
     motion_score: float
     density_score: float
     pose_score: float
+    peak_seconds: float | None = None  # centre of the highest-scoring window inside this span
+
+    @property
+    def anchor_seconds(self) -> float:
+        """Where to centre a clip: the peak if known, else the midpoint."""
+        if self.peak_seconds is not None:
+            return self.peak_seconds
+        return (self.start_seconds + self.end_seconds) / 2
 
 
 DEFAULT_WEIGHTS = {"motion": 0.35, "density": 0.35, "pose": 0.30}
@@ -58,7 +66,7 @@ def score_windows(
         d = norm_density.get(key, 0.0)
         p = norm_pose.get(key, 0.0)
         score = weights["motion"] * m + weights["density"] * d + weights["pose"] * p
-        combined.append(CandidateWindow(key[0], key[1], score, m, d, p))
+        combined.append(CandidateWindow(key[0], key[1], score, m, d, p, peak_seconds=(key[0] + key[1]) / 2))
     return combined
 
 
@@ -90,6 +98,7 @@ def threshold_and_merge(
                 motion_score=max(last.motion_score, window.motion_score),
                 density_score=max(last.density_score, window.density_score),
                 pose_score=max(last.pose_score, window.pose_score),
+                peak_seconds=window.peak_seconds if window.score > last.score else last.peak_seconds,
             )
         else:
             merged.append(window)

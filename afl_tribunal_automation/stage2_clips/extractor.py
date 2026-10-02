@@ -78,7 +78,9 @@ def extract_clip_for_candidate(candidate_id: int) -> Clip:
             else game.broadcast_video_paths
         )
         video_path = video_paths[str(candidate.quarter)]
-        midpoint = (candidate.broadcast_start_seconds + candidate.broadcast_end_seconds) / 2
+        midpoint = candidate.peak_broadcast_seconds
+        if midpoint is None:
+            midpoint = (candidate.broadcast_start_seconds + candidate.broadcast_end_seconds) / 2
     finally:
         session.close()
 

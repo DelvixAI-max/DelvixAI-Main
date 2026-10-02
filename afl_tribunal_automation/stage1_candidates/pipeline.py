@@ -52,8 +52,7 @@ def detect_and_persist_candidates(
         for window in candidate_windows:
             game_clock = None
             if clock_sync is not None:
-                midpoint = (window.start_seconds + window.end_seconds) / 2
-                game_clock = clock_sync.broadcast_to_game(midpoint)
+                game_clock = clock_sync.broadcast_to_game(window.anchor_seconds)
 
             row = Candidate(
                 game_id=game_id,
@@ -61,6 +60,7 @@ def detect_and_persist_candidates(
                 source=source,
                 broadcast_start_seconds=window.start_seconds,
                 broadcast_end_seconds=window.end_seconds,
+                peak_broadcast_seconds=window.peak_seconds,
                 game_clock_seconds=game_clock,
                 score=window.score,
                 motion_score=window.motion_score,

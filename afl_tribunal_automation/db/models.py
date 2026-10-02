@@ -115,6 +115,8 @@ class Candidate(Base):
 
     broadcast_start_seconds: Mapped[float] = mapped_column(Float)
     broadcast_end_seconds: Mapped[float] = mapped_column(Float)
+    # Highest-scoring moment inside the span — clips are centred here
+    peak_broadcast_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     game_clock_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     score: Mapped[float] = mapped_column(Float)
