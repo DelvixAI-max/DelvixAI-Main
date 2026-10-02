@@ -50,8 +50,10 @@ def test_padding_credits_event_straddling_a_boundary():
     samples = [_sample(i / 5, 8 <= i <= 12) for i in range(20)]
     unpadded = grounded_scores_from_samples(samples, 4.0, 2.0, pad_seconds=0.0)
     padded = grounded_scores_from_samples(samples, 4.0, 2.0, pad_seconds=0.6)
-    assert unpadded[(0.0, 2.0)] == 1.0 and unpadded[(2.0, 4.0)] == 1.0
-    assert padded[(0.0, 2.0)] == 4.0  # sees all five readings
+    # unpadded: 2 readings before the boundary (-> 1), 3 after (-> 2)
+    assert unpadded[(0.0, 2.0)] == 1.0 and unpadded[(2.0, 4.0)] == 2.0
+    # padded: both windows see all five readings
+    assert padded[(0.0, 2.0)] == 4.0 and padded[(2.0, 4.0)] == 4.0
 
 
 def test_score_windows_redistributes_when_grounded_absent():
