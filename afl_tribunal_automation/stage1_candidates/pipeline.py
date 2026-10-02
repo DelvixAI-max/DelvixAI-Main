@@ -8,6 +8,7 @@ from common.ffmpeg_utils import probe_duration_seconds
 from config import settings
 from db.models import Candidate, ClipSource, SessionLocal
 from stage0_ingestion.clock_sync import ClockSyncTable
+from stage1_candidates.audio import compute_audio_scores
 from stage1_candidates.motion import compute_motion_scores
 from stage1_candidates.pose import compute_pose_scores
 from stage1_candidates.scoring import CandidateWindow, score_windows, threshold_and_merge
@@ -30,8 +31,12 @@ def detect_candidates_for_video(
         video_path, frame_tracks, window_seconds=window_seconds, duration_seconds=duration
     )
     pose_scores = compute_pose_scores(video_path, window_seconds=window_seconds, duration_seconds=duration)
+    try:
+        audio_scores = compute_audio_scores(video_path, window_seconds=window_seconds, duration_seconds=duration)
+    except Exception:  # noqa: BLE001 - no/unreadable audio track: score on visuals alone
+        audio_scores = None
 
-    windows = score_windows(motion_scores, density_scores, pose_scores)
+    windows = score_windows(motion_scores, density_scores, pose_scores, audio_scores)
     return threshold_and_merge(windows)
 
 
@@ -66,6 +71,7 @@ def detect_and_persist_candidates(
                 motion_score=window.motion_score,
                 density_score=window.density_score,
                 pose_score=window.pose_score,
+                audio_score=window.audio_score,
             )
             session.add(row)
             rows.append(row)

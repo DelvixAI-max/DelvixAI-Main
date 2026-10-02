@@ -123,6 +123,7 @@ class Candidate(Base):
     motion_score: Mapped[float] = mapped_column(Float, default=0.0)
     density_score: Mapped[float] = mapped_column(Float, default=0.0)
     pose_score: Mapped[float] = mapped_column(Float, default=0.0)
+    audio_score: Mapped[float] = mapped_column(Float, default=0.0)
 
     status: Mapped[CandidateStatus] = mapped_column(Enum(CandidateStatus), default=CandidateStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

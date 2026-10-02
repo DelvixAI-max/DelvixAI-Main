@@ -23,6 +23,7 @@ class CandidateWindow:
     motion_score: float
     density_score: float
     pose_score: float
+    audio_score: float = 0.0
     peak_seconds: float | None = None  # centre of the highest-scoring window inside this span
 
     @property
@@ -33,7 +34,7 @@ class CandidateWindow:
         return (self.start_seconds + self.end_seconds) / 2
 
 
-DEFAULT_WEIGHTS = {"motion": 0.35, "density": 0.35, "pose": 0.30}
+DEFAULT_WEIGHTS = {"motion": 0.30, "density": 0.25, "pose": 0.25, "audio": 0.20}
 
 
 def _normalize(values: dict[WindowKey, float]) -> dict[WindowKey, float]:
@@ -49,28 +50,47 @@ def score_windows(
     motion_scores: dict[WindowKey, float],
     density_scores: dict[WindowKey, float],
     pose_scores: dict[WindowKey, float],
+    audio_scores: dict[WindowKey, float] | None = None,
     weights: dict[str, float] | None = None,
 ) -> list[CandidateWindow]:
-    """Combine and normalize the three raw signal maps (must share the same
-    window keys — produced with the same `window_seconds`/`duration_seconds`)
-    into one CandidateWindow per window, sorted by start time."""
-    weights = weights or DEFAULT_WEIGHTS
+    """Combine and normalize the raw signal maps (must share the same window
+    keys — produced with the same `window_seconds`/`duration_seconds`) into
+    one CandidateWindow per window, sorted by start time.
+
+    `audio_scores` is optional (footage with no usable audio track); when
+    absent its weight is redistributed so scores stay comparable."""
+    weights = dict(weights or DEFAULT_WEIGHTS)
+    if audio_scores is None:
+        audio_weight = weights.pop("audio", 0.0)
+        total = sum(weights.values())
+        weights = {k: v + audio_weight * (v / total) for k, v in weights.items()}
+        weights["audio"] = 0.0
+
     norm_motion = _normalize(motion_scores)
     norm_density = _normalize(density_scores)
     norm_pose = _normalize(pose_scores)
+    norm_audio = _normalize(audio_scores or {})
 
-    all_keys = sorted(set(norm_motion) | set(norm_density) | set(norm_pose))
+    all_keys = sorted(set(norm_motion) | set(norm_density) | set(norm_pose) | set(norm_audio))
     combined: list[CandidateWindow] = []
     for key in all_keys:
         m = norm_motion.get(key, 0.0)
         d = norm_density.get(key, 0.0)
         p = norm_pose.get(key, 0.0)
+        a = norm_audio.get(key, 0.0)
         # Density on its own is mostly post-goal regroups and ball-ups —
         # players bunched but nothing happening. Only let it count when
         # there's motion to go with it (a pack *and* a collision).
         gated_density = d * (m ** 0.5)
-        score = weights["motion"] * m + weights["density"] * gated_density + weights["pose"] * p
-        combined.append(CandidateWindow(key[0], key[1], score, m, d, p, peak_seconds=(key[0] + key[1]) / 2))
+        score = (
+            weights["motion"] * m
+            + weights["density"] * gated_density
+            + weights["pose"] * p
+            + weights["audio"] * a
+        )
+        combined.append(
+            CandidateWindow(key[0], key[1], score, m, d, p, audio_score=a, peak_seconds=(key[0] + key[1]) / 2)
+        )
     return combined
 
 
@@ -102,6 +122,7 @@ def threshold_and_merge(
                 motion_score=max(last.motion_score, window.motion_score),
                 density_score=max(last.density_score, window.density_score),
                 pose_score=max(last.pose_score, window.pose_score),
+                audio_score=max(last.audio_score, window.audio_score),
                 peak_seconds=window.peak_seconds if window.score > last.score else last.peak_seconds,
             )
         else:
