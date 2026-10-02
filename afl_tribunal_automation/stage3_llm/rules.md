@@ -1,49 +1,153 @@
-# AFL Reportable Offence Categories — Reference Summary
+# Reportable offences — reference for clip assessment
 
-This is a simplified working reference for triage purposes, not the official
-AFL Match Review Officer (MRO) guidelines document — a human at the league
-must always confirm the actual charge and grading. It exists so Claude has a
-consistent vocabulary of offence categories and severity factors to reason
-against when assessing a candidate clip.
+Source documents (supplied by the league, held locally under `docs/source_rules/`):
 
-## Offence categories
+- **AFL Laws of Australian Football 2025** — Law 18.7 (Rough Conduct), Law 22.2
+  (Reportable Offences), Law 23.2 (Order Off), definitions of *Melee* and
+  *Legal Tackle*.
+- **2026 VAFA Rules V1.4** — Rules 100–100D (reports and the Independent Video
+  Review Officer), Schedule D (prescribed penalties, Categories (i) and (ii)).
 
-- **Striking** — any strike with the arm/hand/fist to an opponent.
-- **Rough Conduct** — forceful contact (bump, hip-and-shoulder, tackle-adjacent
-  contact) deemed unreasonable in the circumstances.
-- **Charging** — forceful contact where the primary infringement is a
-  failure to give a reasonable opportunity to dispose of the ball, or a
-  head-down/blind-side collision.
-- **Tripping** — using the leg/foot (or hand to the leg) to trip an opponent.
-- **Kicking** — any kicking motion directed at another player.
-- **Head-High / Dangerous Tackle** — a tackle or bump that makes forceful
-  contact with the head/neck, including driving an opponent into the ground.
-- **Umpire Contact** — any contact, intentional or careless, with a field
-  umpire, boundary umpire, or goal umpire.
-- **Misconduct / Contrary to the Interests of the Game** — behaviour that
-  doesn't fit a specific physical-contact category but is still reportable
-  (e.g. eye-gouging, biting, racial or homophobic vilification, spitting).
+VAFA adopts the AFL Laws for reportable offences (VAFA Rule 100), so Law
+22.2.2 is the controlling list. Clip assessments should cite the Law 22.2.2
+sub-clause.
 
-## Grading factors (for context, not for Claude to formally adjudicate)
+## Duty of care (Law 22.2.1(b))
 
-Each offence is ultimately graded on:
+In all circumstances a Player owes a duty of care to all other Players,
+Umpires and other persons not to engage in conduct which will constitute a
+Reportable Offence, and to take reasonable care to avoid acts which can be
+reasonably foreseen to result in one. Where an offence may be "intentional
+or careless", a report is proven if the conduct was *either* — so careless
+contact is reportable, not only deliberate contact.
 
-- **Impact**: Low / Medium / High / Severe — outcome for the victim.
-- **Contact**: Low / High — level of contact.
-- **Conduct**: Intentional / Reckless / Negligent — the offender's intent.
+## Law 22.2.2 — Reportable Offences (verbatim list)
 
-## What we want from the model (per clip)
+Any of the following types of conduct is a Reportable Offence:
 
-Given a short sequence of frames from a candidate clip, classify:
+**(a) intentionally or carelessly:**
+- (i) striking another person;
+- (ii) kicking another person;
+- (iii) kneeing another person;
+- (iv) charging an opponent;
+- (v) engaging in Rough Conduct against an opponent;
+- (vi) bumping or making forceful contact to an opponent from front-on when that Player has their head down over the football;
+- (vii) head-butting or making contact to another person using the head;
+- (viii) making unreasonable or unnecessary contact to the eye region of another person;
+- (ix) making unreasonable or unnecessary contact to the face of another person;
+- (x) scratching another person; or
+- (xi) tripping another person whether by hand, arm, foot or leg;
 
-1. Whether this looks like it contains a reportable act, and if so which
-   category above it most resembles.
-2. A short rationale grounded in what's visible (player movement, contact
-   point, apparent forcefulness) — not a legal ruling.
-3. Which players appear to be involved, if jersey numbers are legible.
-4. Whether this needs a human reviewer's eyes regardless of confidence
-   (default to `true` whenever contact is head-high, whenever there's any
-   doubt, or when players/jerseys aren't clearly identifiable).
+**Other offences:**
+- (b) eye-gouging another person;
+- (c) stomping on another person;
+- (d) intentionally making contact with, or striking, an Umpire;
+- (e) attempting to strike an Umpire;
+- (f) spitting on or at an Umpire;
+- (g) behaving in an abusive, insulting, threatening or obscene manner towards or in relation to an Umpire;
+- (h) using abusive, insulting or obscene language towards or in relation to an Umpire;
+- (i) unreasonable or unnecessary contact with an Umpire;
+- (j) carelessly making contact with an Umpire;
+- (k) disputing a decision of an Umpire;
+- (l) spitting on or at another person;
+- (m) attempting to strike another person;
+- (n) attempting to kick another person;
+- (o) attempting to trip another person whether by hand, arm, foot or leg;
+- (p) making unreasonable or unnecessary contact with an injured Player;
+- (q) engaging in a Melee or wrestling another person;
+- (r) instigating a Melee;
+- (s) pinching another person;
+- (t) engaging in an act of staging;
+- (u) using abusive, insulting, threatening or obscene language;
+- (v) use of an obscene gesture;
+- (w) engaging in Time Wasting;
+- (x) interfering with a Player Kicking for Goal;
+- (y) intentionally shaking, climbing or otherwise interfering with a goal or behind post;
+- (z) failing to leave the Playing Surface when directed to do so by an Umpire;
+- (aa) wearing boots, jewellery and equipment prohibited under Law 9; or
+- (bb) engaging in any other act of misconduct or serious misconduct.
 
-Err generously toward `needs_human_review: true` — this tool is a triage
-aid for the league's review officer, not a replacement for their judgement.
+## What makes contact "Rough Conduct" (Law 18.7.2)
+
+Rough conduct is conduct against an opposition Player which in the
+circumstances is unreasonable, including but not limited to:
+
+- (a) executing a dangerous tackle on an opposition Player;
+- (b) making forceful contact below the knees, or a forceful action towards the lower leg causing evasive action;
+- (c) sliding knees or feet first into an opposition Player;
+- (d) using boot studs in a manner likely to cause injury;
+- (e) making high contact (including the top of the shoulders) with any part of the body — **unless** the Player was contesting the ball and it was reasonable to contest it that way, or the contact was caused by circumstances outside the Player's control that could not reasonably be foreseen.
+
+A **Legal Tackle** is on a Player in possession of the football, below the
+shoulders and above the knees, from front, side or behind, without a push in
+the back. Contact that fits this is ordinary football, not an offence.
+
+## Melee (Laws, Part B definition)
+
+An incident involving **three or more** Players and/or Officials who are
+grappling or otherwise struggling with one another and which is likely to
+bring the game into disrepute. Players converging and standing close is not
+a melee; grappling/struggling is.
+
+## Order-off offences (Law 23.2) — the most serious on-field acts
+
+A Player reported for any of these is ordered off for the rest of the match:
+intentionally striking, kicking, kneeing, stomping, eye-gouging or
+head-butting another person; striking/contacting or attempting to strike an
+Umpire; abusive/threatening conduct or language towards an Umpire; spitting
+on another person; serious misconduct.
+
+## VAFA prescribed penalties (Schedule D) — for context on seriousness
+
+Category (i) — may be heard by the Tribunal; 1 match off if prescribed
+penalty accepted:
+striking 4, kicking 5, kneeing 4, charging 3, rough conduct 3, front-on
+head-down bump 3, head-butt 4, eye-region contact 3, face contact 3,
+scratching 3, tripping 3, eye-gouging 3, stomping 4, umpire contact 3–4,
+attempting to strike 2, wrestling 2, other misconduct 3.
+
+Category (ii) — must be heard by the Tribunal (umpire/VRO discretion):
+striking 7, kicking 8, kneeing 7, rough conduct 5, front-on head-down bump
+6, head-butt 7, tripping 6, eye-gouging 6, contact with umpire 9, serious
+misconduct 6.
+
+## VAFA process this tool feeds (Rules 100–100C)
+
+- Umpires report on match day; team managers must attend the umpires' room
+  within 15 minutes of the final siren to learn of any reports.
+- The **Independent Video Review Officer (VRO)** reviews footage after the
+  match and recommends reports. VRO video reports must be issued to clubs
+  **by 2:00 pm Monday**. Clubs may also request a review (by 12:00 pm Monday,
+  $350 fee).
+- Players must elect to contest or accept the penalty by 12:00 pm Monday
+  (match-day reports) or 12:00 pm Tuesday (video reports); hearings are on
+  the Tuesday night.
+
+So the VRO has roughly Saturday evening to Monday lunchtime to find missed
+incidents across every match — the window this tool is meant to compress.
+
+## What is being asked of you
+
+You are **not** deciding whether an offence occurred or which rule applies.
+The league's reviewer does that. Your job is to say whether a clip contains
+something a reviewer would want to look at, and to describe what is visible
+so they can find it quickly. The rules above exist so you recognise what
+counts — a strike is different from a push, three players grappling is
+different from three players standing close, high contact in a genuine
+marking contest is different from high contact away from the ball.
+
+1. Decide whether what is visible is ordinary football contact (a Legal
+   Tackle, a marking contest, a bump within the rules, a ball-up scrimmage)
+   or something that could fall under Law 22.2.2. Most clips are the former.
+2. Describe what you saw in plain terms: contact point (head / high / body /
+   legs), whether the player hit had the ball, front-on or side, strike vs
+   push vs tackle, how many players are grappling, whether anyone stays down,
+   whether an umpire is involved.
+3. Mark it potentially reportable whenever contact is to the head or neck, a
+   player stays down, three or more players are grappling, an umpire is
+   involved, or the frames don't settle the question. Err toward flagging:
+   a missed incident costs far more than an extra clip for the reviewer.
+4. The category is an optional hint for sorting the reviewer's list. Leave it
+   null if unsure; never let picking a category stop you flagging the clip.
+5. Jersey numbers are often illegible at 720p ground-camera resolution;
+   report a number only when clearly readable, otherwise leave it null.

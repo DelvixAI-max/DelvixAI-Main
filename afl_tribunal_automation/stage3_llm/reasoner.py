@@ -15,16 +15,18 @@ from stage3_llm.schemas import OFFENCE_ASSESSMENT_TOOL_SCHEMA, OffenceAssessment
 
 _RULES_TEXT = (Path(__file__).parent / "rules.md").read_text()
 
-_SYSTEM_PROMPT = f"""You are assisting an AFL league's match review officer by triaging \
-candidate incident clips flagged by an automated motion/player-density heuristic. \
+_SYSTEM_PROMPT = f"""You are assisting a football league's Video Review Officer by triaging \
+candidate clips flagged by an automated motion/player-density/audio heuristic. \
 The heuristic is deliberately high-recall and low-precision, so most clips you see \
-will NOT contain a genuine reportable act — your job is to filter and rank, not to \
-assume every clip is an incident.
+will NOT contain anything reportable. Your job is to say whether each clip contains \
+something *potentially* reportable and describe what is visible, so the reviewer can \
+decide. You do not rule on whether it is reportable or which rule applies — the \
+reviewer does that.
 
 {_RULES_TEXT}
 
 You will be shown a short sequence of frames sampled through the candidate window. \
-Call the `record_offence_assessment` tool exactly once with your assessment."""
+Call the `record_clip_assessment` tool exactly once with your assessment."""
 
 
 def _client():
@@ -60,7 +62,7 @@ def assess_clip(
         max_tokens=1024,
         system=_SYSTEM_PROMPT,
         tools=[OFFENCE_ASSESSMENT_TOOL_SCHEMA],
-        tool_choice={"type": "tool", "name": "record_offence_assessment"},
+        tool_choice={"type": "tool", "name": "record_clip_assessment"},
         messages=[{"role": "user", "content": content}],
     )
 
@@ -102,11 +104,14 @@ def assess_and_persist(candidate_id: int, clip_id: int) -> LLMAssessment:
         row = LLMAssessment(
             candidate_id=candidate_id,
             clip_id=clip_id,
-            offence_category=assessment.offence_category,
+            offence_category=assessment.possible_category or (
+                "potentially_reportable" if assessment.potentially_reportable else "not_reportable"
+            ),
             confidence=assessment.confidence,
-            rationale=assessment.rationale,
+            rationale=assessment.what_was_seen,
             players_involved=[p.model_dump() for p in assessment.players_involved],
-            needs_human_review=assessment.needs_human_review,
+            # Anything potentially reportable goes to the human; that's the whole point.
+            needs_human_review=assessment.potentially_reportable,
             raw_response=assessment.model_dump(),
         )
         session.add(row)

@@ -35,3 +35,6 @@ afl_tribunal_automation/storage/
 
 # Model weights (auto-downloaded by ultralytics on first run)
 *.pt
+
+# League rule documents (supplied by the league, not redistributed here)
+afl_tribunal_automation/docs/source_rules/
