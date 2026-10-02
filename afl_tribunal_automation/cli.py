@@ -141,6 +141,12 @@ def cmd_run_game(args: argparse.Namespace) -> None:
             json.dump([r.__dict__ for r in ranked], f, indent=2)
         print(f"Wrote {args.output_json}")
 
+    if args.reel:
+        from orchestrator.game_pipeline import build_game_review_reel
+
+        path = build_game_review_reel(args.game_id, ranked, args.reel, min_confidence=args.reel_min_confidence)
+        print(f"Review reel written to {path}")
+
 
 def cmd_serve_webhook(args: argparse.Namespace) -> None:
     import uvicorn
@@ -205,6 +211,11 @@ def main() -> None:
     p = subparsers.add_parser("run-game", help="Stages 0-3 end to end for a game")
     p.add_argument("--game-id", type=int, required=True)
     p.add_argument("--output-json", type=str, default=None)
+    p.add_argument("--reel", type=str, default=None, help="Write the condensed review video to this path")
+    p.add_argument(
+        "--reel-min-confidence", type=float, default=0.3,
+        help="Drop candidates below this confidence that Claude also cleared (default 0.3)",
+    )
     p.set_defaults(func=cmd_run_game)
 
     p = subparsers.add_parser("serve-webhook", help="Stage 4: serve the umpire-report intake webhook")

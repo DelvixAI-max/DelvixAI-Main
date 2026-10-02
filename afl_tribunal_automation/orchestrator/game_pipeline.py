@@ -104,3 +104,57 @@ def run_full_pipeline(game_id: int) -> list[RankedClip]:
 
     ranked.sort(key=lambda r: (r.needs_human_review, r.confidence), reverse=True)
     return ranked
+
+
+def build_game_review_reel(
+    game_id: int,
+    ranked: list[RankedClip],
+    output_path: str,
+    min_confidence: float = 0.0,
+) -> str:
+    """Build the condensed review video for the analyst.
+
+    Order: umpire-reported incidents first (they're certain to need a look),
+    then the LLM-ranked candidates, best first. `min_confidence` drops
+    low-confidence candidates that Claude also cleared (needs_human_review
+    False) to keep the reel tight.
+    """
+    from db.models import Clip, UmpireReport
+    from stage2_clips.review_reel import ReelEntry, build_review_reel
+
+    entries: list[ReelEntry] = []
+
+    session = SessionLocal()
+    try:
+        reported = (
+            session.query(Clip, UmpireReport)
+            .join(UmpireReport, Clip.umpire_report_id == UmpireReport.id)
+            .filter(Clip.game_id == game_id)
+            .order_by(UmpireReport.quarter, UmpireReport.game_clock_seconds)
+            .all()
+        )
+        for clip, report in reported:
+            entries.append(
+                ReelEntry(
+                    clip_path=clip.url,
+                    quarter=clip.quarter,
+                    game_clock_seconds=clip.game_clock_seconds,
+                    label=f"UMPIRE REPORT {report.incident_type} #{report.offender_jumper_number}",
+                )
+            )
+    finally:
+        session.close()
+
+    for r in ranked:
+        if not r.needs_human_review and r.confidence < min_confidence:
+            continue
+        entries.append(
+            ReelEntry(
+                clip_path=r.clip_url,
+                quarter=r.quarter,
+                game_clock_seconds=r.game_clock,
+                label=f"{r.offence_category} {r.confidence:.2f}",
+            )
+        )
+
+    return build_review_reel(entries, output_path)
