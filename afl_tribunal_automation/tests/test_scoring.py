@@ -33,7 +33,7 @@ def test_threshold_and_merge_drops_low_score_windows():
         CandidateWindow(0.0, 2.0, score=0.9, motion_score=0.9, density_score=0.9, pose_score=0.9),
         CandidateWindow(2.0, 4.0, score=0.1, motion_score=0.1, density_score=0.1, pose_score=0.1),
     ]
-    kept = threshold_and_merge(windows, score_threshold=0.5, merge_gap_seconds=2)
+    kept = threshold_and_merge(windows, score_threshold=0.5, merge_gap_seconds=2, top_fraction=0)
     assert len(kept) == 1
     assert kept[0].start_seconds == 0.0
 
@@ -46,7 +46,7 @@ def test_threshold_and_merge_merges_adjacent_windows():
         CandidateWindow(2.0, 4.0, score=0.7, motion_score=0.0, density_score=0.7, pose_score=0.0),
         CandidateWindow(10.0, 12.0, score=0.8, motion_score=0.0, density_score=0.0, pose_score=0.8),
     ]
-    merged = threshold_and_merge(windows, score_threshold=0.5, merge_gap_seconds=2)
+    merged = threshold_and_merge(windows, score_threshold=0.5, merge_gap_seconds=2, top_fraction=0)
     assert len(merged) == 2
     assert merged[0].start_seconds == 0.0
     assert merged[0].end_seconds == 4.0

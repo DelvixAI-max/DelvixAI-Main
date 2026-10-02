@@ -98,16 +98,30 @@ def threshold_and_merge(
     windows: list[CandidateWindow],
     score_threshold: float | None = None,
     merge_gap_seconds: float | None = None,
+    top_fraction: float | None = None,
 ) -> list[CandidateWindow]:
-    """Keep windows scoring above threshold, then merge windows that are
+    """Keep the highest-scoring windows, then merge windows that are
     adjacent or within `merge_gap_seconds` of each other into one candidate
-    (taking the max score/components across the merged span)."""
+    (taking the max score/components across the merged span).
+
+    Selection is relative by default: `top_fraction` keeps that share of all
+    windows (e.g. 0.04 = the top 4% of a quarter), which stays stable no
+    matter how many signals feed the score or how lively the game is. An
+    absolute `score_threshold` is applied on top as a floor.
+    """
     score_threshold = score_threshold if score_threshold is not None else settings.candidate_score_threshold
     merge_gap_seconds = (
         merge_gap_seconds if merge_gap_seconds is not None else settings.candidate_merge_gap_seconds
     )
+    top_fraction = top_fraction if top_fraction is not None else settings.candidate_top_fraction
 
-    kept = sorted((w for w in windows if w.score >= score_threshold), key=lambda w: w.start_seconds)
+    cutoff = score_threshold
+    if top_fraction and windows:
+        scores = sorted((w.score for w in windows), reverse=True)
+        keep_n = max(1, int(round(len(scores) * top_fraction)))
+        cutoff = max(score_threshold, scores[keep_n - 1])
+
+    kept = sorted((w for w in windows if w.score >= cutoff), key=lambda w: w.start_seconds)
     if not kept:
         return []
 

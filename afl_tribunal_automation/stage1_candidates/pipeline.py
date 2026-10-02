@@ -4,6 +4,9 @@ rows."""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from common.ffmpeg_utils import probe_duration_seconds
 from config import settings
 from db.models import Candidate, ClipSource, SessionLocal
@@ -15,6 +18,54 @@ from stage1_candidates.scoring import CandidateWindow, score_windows, threshold_
 from stage1_candidates.tracking import compute_density_scores, track_players
 
 
+SignalMap = dict[tuple[float, float], float]
+
+
+def _signal_cache_path(video_path: str, window_seconds: float) -> Path:
+    stat = Path(video_path).stat()
+    key = f"{Path(video_path).stem}_{stat.st_size}_{int(stat.st_mtime)}_w{window_seconds:g}.json"
+    return Path(settings.local_storage_dir) / "signals" / key
+
+
+def _dump(signal: SignalMap | None) -> list | None:
+    return None if signal is None else [[s, e, v] for (s, e), v in signal.items()]
+
+
+def _load(items: list | None) -> SignalMap | None:
+    return None if items is None else {(s, e): v for s, e, v in items}
+
+
+def compute_signals(video_path: str, window_seconds: float, use_cache: bool = True) -> dict[str, SignalMap | None]:
+    """Run the four raw signal extractors (the expensive part — minutes of
+    YOLO/pose/flow per quarter) and cache the per-window results, so
+    scoring and thresholds can be re-tuned in seconds without re-running
+    the models."""
+    cache = _signal_cache_path(video_path, window_seconds)
+    if use_cache and cache.exists():
+        data = json.loads(cache.read_text())
+        return {name: _load(data[name]) for name in ("motion", "density", "pose", "audio")}
+
+    duration = probe_duration_seconds(video_path)
+    frame_tracks = track_players(video_path)
+    signals: dict[str, SignalMap | None] = {
+        "motion": compute_motion_scores(video_path, window_seconds=window_seconds, duration_seconds=duration),
+        "density": compute_density_scores(
+            video_path, frame_tracks, window_seconds=window_seconds, duration_seconds=duration
+        ),
+        "pose": compute_pose_scores(video_path, window_seconds=window_seconds, duration_seconds=duration),
+    }
+    try:
+        signals["audio"] = compute_audio_scores(
+            video_path, window_seconds=window_seconds, duration_seconds=duration
+        )
+    except Exception:  # noqa: BLE001 - no/unreadable audio track: score on visuals alone
+        signals["audio"] = None
+
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps({name: _dump(sig) for name, sig in signals.items()}))
+    return signals
+
+
 def detect_candidates_for_video(
     video_path: str,
     window_seconds: float | None = None,
@@ -22,21 +73,8 @@ def detect_candidates_for_video(
     """Run the full stage-1 heuristic pipeline over a single quarter video
     and return the merged, thresholded candidate windows."""
     window_seconds = window_seconds or settings.candidate_window_seconds
-    duration = probe_duration_seconds(video_path)
-
-    frame_tracks = track_players(video_path)
-
-    motion_scores = compute_motion_scores(video_path, window_seconds=window_seconds, duration_seconds=duration)
-    density_scores = compute_density_scores(
-        video_path, frame_tracks, window_seconds=window_seconds, duration_seconds=duration
-    )
-    pose_scores = compute_pose_scores(video_path, window_seconds=window_seconds, duration_seconds=duration)
-    try:
-        audio_scores = compute_audio_scores(video_path, window_seconds=window_seconds, duration_seconds=duration)
-    except Exception:  # noqa: BLE001 - no/unreadable audio track: score on visuals alone
-        audio_scores = None
-
-    windows = score_windows(motion_scores, density_scores, pose_scores, audio_scores)
+    sig = compute_signals(video_path, window_seconds)
+    windows = score_windows(sig["motion"], sig["density"], sig["pose"], sig["audio"])
     return threshold_and_merge(windows)
 
 

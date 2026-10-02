@@ -48,6 +48,8 @@ class Settings:
     candidate_merge_gap_seconds: int = field(
         default_factory=lambda: _env_int("CANDIDATE_MERGE_GAP_SECONDS", 2)
     )
+    # Keep this share of all windows (0.04 = top 4%); score_threshold acts as a floor.
+    candidate_top_fraction: float = field(default_factory=lambda: _env_float("CANDIDATE_TOP_FRACTION", 0.04))
 
     clip_buffer_before_seconds: float = field(
         default_factory=lambda: _env_float("CLIP_BUFFER_BEFORE_SECONDS", 3.0)
