@@ -65,7 +65,11 @@ def score_windows(
         m = norm_motion.get(key, 0.0)
         d = norm_density.get(key, 0.0)
         p = norm_pose.get(key, 0.0)
-        score = weights["motion"] * m + weights["density"] * d + weights["pose"] * p
+        # Density on its own is mostly post-goal regroups and ball-ups —
+        # players bunched but nothing happening. Only let it count when
+        # there's motion to go with it (a pack *and* a collision).
+        gated_density = d * (m ** 0.5)
+        score = weights["motion"] * m + weights["density"] * gated_density + weights["pose"] * p
         combined.append(CandidateWindow(key[0], key[1], score, m, d, p, peak_seconds=(key[0] + key[1]) / 2))
     return combined
 

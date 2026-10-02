@@ -54,7 +54,15 @@ def compute_motion_scores(
 
                 if prev_gray is not None:
                     flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-                    magnitude = float(np.linalg.norm(flow, axis=2).mean())
+                    # A single-operator ground camera pans constantly to follow
+                    # the ball; that whole-frame shift dominates raw flow. The
+                    # median flow vector is a good estimate of the pan, so
+                    # subtract it and measure only what moves *relative* to it
+                    # (players), and take the 95th percentile rather than the
+                    # mean so a few fast-moving bodies register over a static field.
+                    pan = np.median(flow.reshape(-1, 2), axis=0)
+                    residual = np.linalg.norm(flow - pan, axis=2)
+                    magnitude = float(np.percentile(residual, 95))
                     per_sample.append((frame_index / fps, magnitude))
                 prev_gray = gray
         frame_index += 1
