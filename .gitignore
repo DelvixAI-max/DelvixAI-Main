@@ -32,3 +32,6 @@ Thumbs.db
 # AFL pipeline local run artefacts
 afl_tribunal_automation/afl_tribunal.db
 afl_tribunal_automation/storage/
+
+# Model weights (auto-downloaded by ultralytics on first run)
+*.pt
