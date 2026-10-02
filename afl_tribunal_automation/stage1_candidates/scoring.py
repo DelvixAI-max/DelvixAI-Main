@@ -46,6 +46,19 @@ def _normalize(values: dict[WindowKey, float]) -> dict[WindowKey, float]:
     return {key: value / max_value for key, value in values.items()}
 
 
+def align_reaction_backwards(signal: dict[WindowKey, float], lag_windows: int = 2) -> dict[WindowKey, float]:
+    """A crowd reaction or whistle follows the event it responds to by a
+    second or two. Credit each window with the loudest reaction in the next
+    `lag_windows` windows as well as its own, so the reaction lands on the
+    window that holds the action rather than the one after it."""
+    keys = sorted(signal)
+    values = [signal[k] for k in keys]
+    aligned = {}
+    for i, key in enumerate(keys):
+        aligned[key] = max(values[i : i + lag_windows + 1])
+    return aligned
+
+
 def score_windows(
     motion_scores: dict[WindowKey, float],
     density_scores: dict[WindowKey, float],
@@ -69,7 +82,7 @@ def score_windows(
     norm_motion = _normalize(motion_scores)
     norm_density = _normalize(density_scores)
     norm_pose = _normalize(pose_scores)
-    norm_audio = _normalize(audio_scores or {})
+    norm_audio = _normalize(align_reaction_backwards(audio_scores) if audio_scores else {})
 
     all_keys = sorted(set(norm_motion) | set(norm_density) | set(norm_pose) | set(norm_audio))
     combined: list[CandidateWindow] = []
