@@ -22,7 +22,24 @@ Same single-camera 720p recording as Q1. 30:48. Quarter clock = video time − 4
 | 4 signals, imgsz 640 | 26 | 76 | ✗ (rank 694/925) | ✗ | ✓ #1 | ✓ | ✓ #3 | ✗ |
 | + imgsz 1280 | 25 | 78 | ✗ (rank 578/925) | ✗ | ✓ #1 | ✓ | ✓ | ✗ |
 | + grounded (run-based) | 26 | 78 | ✗ (rank 429) | ✗ (rank 75, g=0) | ✓ #1 | ✓ | ✓ | **✓ #7, g=1.0** |
-| + grounded (count, padded, cached samples) | *pending* | | | | | | | |
+| + grounded (count, padded, cached samples) | 24 | 78 | ✗ (rank 232) | ✗ (rank 51) | ✓ #2 | ✓ | ✓ | ✓ | + 14:08 ✓ |
+
+At the top-4% cut: **5 of 8** incidents (the 7 listed plus 14:08). 17:28 sits
+just outside (rank 51 of 925): its horizontal-body readings are real but
+sparse (1–4 per window) because the downed player is mostly hidden by the pack.
+
+Cut sweep from cached signals:
+
+| cut | cands | secs | caught |
+|---|---|---|---|
+| 4% | 24 | 78 | 5/7 |
+| 5% | 30 | 96 | 5/7 |
+| **6%** | **35** | **120** | **6/7** (adds 17:28) |
+| 8% | 44 | 164 | 6/7 |
+
+Default moved to **6%**: ~2 min of candidate clips per quarter, ~8 min per
+game before stage-3 filtering. The sling tackle and its immediate aftermath
+remain out of reach for the reasons in §3 below.
 
 The grounded signal also surfaced a moment nobody had listed: **14:08 (852 s)** —
 a player tackled, landing flat on his side, taking 4–5 s to get up while
