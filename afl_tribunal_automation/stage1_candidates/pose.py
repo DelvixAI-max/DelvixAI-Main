@@ -68,7 +68,7 @@ def compute_pose_scores(
         stream=True,
         verbose=False,
         vid_stride=stride,
-        imgsz=640,
+        imgsz=1280,  # see tracking.py — 640 misses most players on 720p footage
     )
 
     # track_id -> list of (timestamp, torso_center)

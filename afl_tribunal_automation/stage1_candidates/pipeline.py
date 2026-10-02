@@ -20,10 +20,14 @@ from stage1_candidates.tracking import compute_density_scores, track_players
 
 SignalMap = dict[tuple[float, float], float]
 
+# Bump whenever a signal extractor changes in a way that alters its output
+# (model, resolution, sampling), so stale cached signals aren't reused.
+SIGNAL_VERSION = "v2-imgsz1280"
+
 
 def _signal_cache_path(video_path: str, window_seconds: float) -> Path:
     stat = Path(video_path).stat()
-    key = f"{Path(video_path).stem}_{stat.st_size}_{int(stat.st_mtime)}_w{window_seconds:g}.json"
+    key = f"{Path(video_path).stem}_{stat.st_size}_{int(stat.st_mtime)}_w{window_seconds:g}_{SIGNAL_VERSION}.json"
     return Path(settings.local_storage_dir) / "signals" / key
 
 

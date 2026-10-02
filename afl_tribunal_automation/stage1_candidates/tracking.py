@@ -61,7 +61,10 @@ def track_players(video_path: str, sample_fps: float = 5.0, weights: str = "yolo
         stream=True,
         verbose=False,
         vid_stride=stride,
-        imgsz=640,
+        # Native width. At the default 640 the model saw only 2-3 of ~10
+        # players per frame on 720p ground footage and lost anyone horizontal
+        # (i.e. the tackled player) — at 1280 it sees 8-10, at no extra cost.
+        imgsz=1280,
     )
 
     frame_tracks: list[FrameTracks] = []
