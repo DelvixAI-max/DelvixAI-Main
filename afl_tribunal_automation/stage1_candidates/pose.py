@@ -51,14 +51,40 @@ def torso_angle_from_vertical(kpts_xy: np.ndarray) -> float:
     return float(np.degrees(np.arctan2(abs(v[0]), abs(v[1]) + 1e-6)))
 
 
+GroundedSample = tuple[float, float, int, int]  # (timestamp, max_torso_angle, n_bodies>55deg, n_bodies>60deg)
+
+
+def grounded_scores_from_samples(
+    samples: list[GroundedSample],
+    duration_seconds: float,
+    window_seconds: float,
+    threshold_degrees: float = HORIZONTAL_DEGREES,
+    pad_seconds: float = 0.6,
+) -> dict[tuple[float, float], float]:
+    """Score each window by how many samples in [start-pad, end+pad) had at
+    least one body lying past `threshold_degrees`, minus one so an isolated
+    single reading scores 0.
+
+    A count (rather than a run of consecutive samples) survives the flicker
+    of a partly-occluded body in a pack dropping in and out of detection,
+    and the padding stops an event straddling a window boundary being split
+    into two sub-threshold halves.
+    """
+    idx = 3 if threshold_degrees >= 60 else 2
+    scores: dict[tuple[float, float], float] = {}
+    for start, end in windows(duration_seconds, window_seconds):
+        count = sum(1 for s in samples if start - pad_seconds <= s[0] < end + pad_seconds and s[idx] > 0)
+        scores[(start, end)] = float(max(0, count - 1))
+    return scores
+
+
 def grounded_run_scores(
     samples: list[tuple[float, int]],
     duration_seconds: float,
     window_seconds: float,
 ) -> dict[tuple[float, float], float]:
-    """From per-sample (timestamp, n_horizontal_bodies), score each window by
-    the longest run of consecutive samples with at least one horizontal body,
-    minus one so an isolated single reading scores 0."""
+    """Earlier, stricter aggregation kept for comparison: longest run of
+    consecutive samples with a horizontal body, minus one."""
     scores: dict[tuple[float, float], float] = {}
     for start, end in windows(duration_seconds, window_seconds):
         best = run = 0
@@ -97,8 +123,8 @@ def compute_pose_signals(
 
     # track_id -> list of (timestamp, torso_center) for the acceleration signal
     track_history: dict[int, list[tuple[float, np.ndarray]]] = defaultdict(list)
-    # (timestamp, number of bodies lying horizontal) for the grounded signal
-    horizontal_samples: list[tuple[float, int]] = []
+    # Raw per-sample torso-orientation readings for the grounded signal
+    grounded_samples: list[GroundedSample] = []
     last_timestamp = 0.0
 
     for sample_idx, result in enumerate(results):
@@ -106,22 +132,24 @@ def compute_pose_signals(
         last_timestamp = timestamp
         kpts = result.keypoints
         if kpts is None or kpts.conf is None or len(kpts) == 0:
-            horizontal_samples.append((timestamp, 0))
+            grounded_samples.append((timestamp, 0.0, 0, 0))
             continue
         xy = kpts.xy.cpu().numpy()
         conf = kpts.conf.cpu().numpy()
         ids = result.boxes.id.int().tolist() if result.boxes is not None and result.boxes.id is not None else None
 
-        n_horizontal = 0
+        max_angle, n55, n60 = 0.0, 0, 0
         for i in range(len(xy)):
             if conf[i][_TORSO].min() < MIN_KEYPOINT_CONF:
                 continue
-            if torso_angle_from_vertical(xy[i]) > HORIZONTAL_DEGREES:
-                n_horizontal += 1
+            angle = torso_angle_from_vertical(xy[i])
+            max_angle = max(max_angle, angle)
+            n55 += angle > 55.0
+            n60 += angle > 60.0
             if ids is not None and i < len(ids):
                 center = xy[i][_TORSO].mean(axis=0)
                 track_history[ids[i]].append((timestamp, center))
-        horizontal_samples.append((timestamp, n_horizontal))
+        grounded_samples.append((timestamp, round(max_angle, 1), n55, n60))
 
     # Per-track acceleration events: (timestamp, acceleration_magnitude)
     accel_events: list[tuple[float, float]] = []
@@ -149,7 +177,8 @@ def compute_pose_signals(
 
     return {
         "pose": pose_scores,
-        "grounded": grounded_run_scores(horizontal_samples, duration_seconds, window_seconds),
+        "grounded": grounded_scores_from_samples(grounded_samples, duration_seconds, window_seconds),
+        "grounded_samples": grounded_samples,  # raw, so aggregation can be re-tuned from cache
     }
 
 

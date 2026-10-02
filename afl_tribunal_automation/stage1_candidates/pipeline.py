@@ -13,7 +13,7 @@ from db.models import Candidate, ClipSource, SessionLocal
 from stage0_ingestion.clock_sync import ClockSyncTable
 from stage1_candidates.audio import compute_audio_scores
 from stage1_candidates.motion import compute_motion_scores
-from stage1_candidates.pose import compute_pose_signals
+from stage1_candidates.pose import compute_pose_signals, grounded_scores_from_samples
 from stage1_candidates.scoring import CandidateWindow, score_windows, threshold_and_merge
 from stage1_candidates.tracking import compute_density_scores, track_players
 
@@ -22,7 +22,7 @@ SignalMap = dict[tuple[float, float], float]
 
 # Bump whenever a signal extractor changes in a way that alters its output
 # (model, resolution, sampling), so stale cached signals aren't reused.
-SIGNAL_VERSION = "v3-grounded"
+SIGNAL_VERSION = "v4-grounded-samples"
 
 
 def _signal_cache_path(video_path: str, window_seconds: float) -> Path:
@@ -47,7 +47,16 @@ def compute_signals(video_path: str, window_seconds: float, use_cache: bool = Tr
     cache = _signal_cache_path(video_path, window_seconds)
     if use_cache and cache.exists():
         data = json.loads(cache.read_text())
-        return {name: _load(data.get(name)) for name in ("motion", "density", "pose", "grounded", "audio")}
+        signals = {name: _load(data.get(name)) for name in ("motion", "density", "pose", "grounded", "audio")}
+        raw = data.get("grounded_samples")
+        if raw:
+            # Re-aggregate from the raw readings so threshold/padding changes
+            # take effect without re-running the pose model.
+            duration = max(k[1] for k in signals["motion"]) if signals["motion"] else 0.0
+            signals["grounded"] = grounded_scores_from_samples(
+                [tuple(s) for s in raw], duration, window_seconds
+            )
+        return signals
 
     duration = probe_duration_seconds(video_path)
     frame_tracks = track_players(video_path)
@@ -60,6 +69,7 @@ def compute_signals(video_path: str, window_seconds: float, use_cache: bool = Tr
         "pose": pose_signals["pose"],
         "grounded": pose_signals["grounded"],
     }
+    grounded_samples = pose_signals["grounded_samples"]
     try:
         signals["audio"] = compute_audio_scores(
             video_path, window_seconds=window_seconds, duration_seconds=duration
@@ -68,7 +78,9 @@ def compute_signals(video_path: str, window_seconds: float, use_cache: bool = Tr
         signals["audio"] = None
 
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({name: _dump(sig) for name, sig in signals.items()}))
+    payload = {name: _dump(sig) for name, sig in signals.items()}
+    payload["grounded_samples"] = [list(s) for s in grounded_samples]
+    cache.write_text(json.dumps(payload))
     return signals
 
 
