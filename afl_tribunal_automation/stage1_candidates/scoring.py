@@ -24,6 +24,7 @@ class CandidateWindow:
     density_score: float
     pose_score: float
     audio_score: float = 0.0
+    grounded_score: float = 0.0
     peak_seconds: float | None = None  # centre of the highest-scoring window inside this span
 
     @property
@@ -34,7 +35,8 @@ class CandidateWindow:
         return (self.start_seconds + self.end_seconds) / 2
 
 
-DEFAULT_WEIGHTS = {"motion": 0.30, "density": 0.25, "pose": 0.25, "audio": 0.20}
+DEFAULT_WEIGHTS = {"motion": 0.25, "density": 0.20, "pose": 0.20, "audio": 0.15, "grounded": 0.20}
+_OPTIONAL_SIGNALS = ("audio", "grounded")
 
 
 def _normalize(values: dict[WindowKey, float]) -> dict[WindowKey, float]:
@@ -65,32 +67,37 @@ def score_windows(
     pose_scores: dict[WindowKey, float],
     audio_scores: dict[WindowKey, float] | None = None,
     weights: dict[str, float] | None = None,
+    grounded_scores: dict[WindowKey, float] | None = None,
 ) -> list[CandidateWindow]:
     """Combine and normalize the raw signal maps (must share the same window
     keys — produced with the same `window_seconds`/`duration_seconds`) into
     one CandidateWindow per window, sorted by start time.
 
-    `audio_scores` is optional (footage with no usable audio track); when
-    absent its weight is redistributed so scores stay comparable."""
+    `audio_scores` and `grounded_scores` are optional; when absent their
+    weight is redistributed over the present signals so scores stay comparable."""
     weights = dict(weights or DEFAULT_WEIGHTS)
-    if audio_scores is None:
-        audio_weight = weights.pop("audio", 0.0)
+    present = {"audio": audio_scores is not None, "grounded": grounded_scores is not None}
+    missing_weight = sum(weights.pop(name, 0.0) for name in _OPTIONAL_SIGNALS if not present[name])
+    if missing_weight:
         total = sum(weights.values())
-        weights = {k: v + audio_weight * (v / total) for k, v in weights.items()}
-        weights["audio"] = 0.0
+        weights = {k: v + missing_weight * (v / total) for k, v in weights.items()}
+    for name in _OPTIONAL_SIGNALS:
+        weights.setdefault(name, 0.0)
 
     norm_motion = _normalize(motion_scores)
     norm_density = _normalize(density_scores)
     norm_pose = _normalize(pose_scores)
     norm_audio = _normalize(align_reaction_backwards(audio_scores) if audio_scores else {})
+    norm_grounded = _normalize(grounded_scores or {})
 
-    all_keys = sorted(set(norm_motion) | set(norm_density) | set(norm_pose) | set(norm_audio))
+    all_keys = sorted(set(norm_motion) | set(norm_density) | set(norm_pose) | set(norm_audio) | set(norm_grounded))
     combined: list[CandidateWindow] = []
     for key in all_keys:
         m = norm_motion.get(key, 0.0)
         d = norm_density.get(key, 0.0)
         p = norm_pose.get(key, 0.0)
         a = norm_audio.get(key, 0.0)
+        g = norm_grounded.get(key, 0.0)
         # Density on its own is mostly post-goal regroups and ball-ups —
         # players bunched but nothing happening. Only let it count when
         # there's motion to go with it (a pack *and* a collision).
@@ -100,9 +107,13 @@ def score_windows(
             + weights["density"] * gated_density
             + weights["pose"] * p
             + weights["audio"] * a
+            + weights["grounded"] * g
         )
         combined.append(
-            CandidateWindow(key[0], key[1], score, m, d, p, audio_score=a, peak_seconds=(key[0] + key[1]) / 2)
+            CandidateWindow(
+                key[0], key[1], score, m, d, p,
+                audio_score=a, grounded_score=g, peak_seconds=(key[0] + key[1]) / 2,
+            )
         )
     return combined
 
@@ -150,6 +161,7 @@ def threshold_and_merge(
                 density_score=max(last.density_score, window.density_score),
                 pose_score=max(last.pose_score, window.pose_score),
                 audio_score=max(last.audio_score, window.audio_score),
+                grounded_score=max(last.grounded_score, window.grounded_score),
                 peak_seconds=window.peak_seconds if window.score > last.score else last.peak_seconds,
             )
         else:

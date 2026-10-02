@@ -24,9 +24,10 @@ def test_score_windows_redistributes_audio_weight_when_absent():
     p = {(0.0, 2.0): 0.0}
     with_audio = score_windows(m, d, p, audio_scores={(0.0, 2.0): 1.0})
     without = score_windows(m, d, p, audio_scores=None)
-    # Max on every present signal should give the same full-scale score either way
-    assert abs(with_audio[0].score - (0.30 + 0.20)) < 1e-9
-    assert abs(without[0].score - 0.30 / 0.80) < 1e-9
+    # grounded absent in both: its 0.20 is spread over the remaining 0.80
+    assert abs(with_audio[0].score - (0.25 + 0.15) / 0.80) < 1e-9
+    # audio and grounded absent: motion's 0.25 scaled over the remaining 0.65
+    assert abs(without[0].score - 0.25 / 0.65) < 1e-9
 
 
 def test_audio_contributes_to_score():

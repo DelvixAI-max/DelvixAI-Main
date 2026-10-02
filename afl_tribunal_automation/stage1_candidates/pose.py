@@ -1,12 +1,17 @@
-"""Pose-based "sudden impact" signal via YOLOv8-pose (+ ByteTrack).
+"""Pose-based signals via YOLOv8-pose (+ ByteTrack), one pass over the video.
 
-Tracks every player's torso centre (midpoint of shoulders and hips) across
-sampled frames and flags sudden changes in its velocity — a cheap proxy for
-a player being collected at speed, falling, or snapping backwards, all of
-which are suggestive of a reportable-act moment worth a human/LLM look.
+Two signals come out of the same model run:
 
-Runs on the whole frame, so it needs no per-player crops and no dependency
-on the detection tracker's output.
+* **pose** — sudden change in a tracked player's torso velocity (a player
+  collected at speed, snapping backwards). Dominated in practice by sprinters
+  changing direction, so it's a weak incident signal on its own.
+* **grounded** — a body lying horizontal for a sustained run of samples.
+  Every pack-over-a-downed-player incident in the VAFA test footage shows
+  this (several consecutive readings of torso angle 57-89° from vertical),
+  while ordinary play only produces isolated single readings just over 55°.
+  Requiring a run of >= 2 consecutive samples suppresses that noise.
+
+Runs on the whole frame at native resolution (see tracking.py).
 """
 
 from __future__ import annotations
@@ -22,6 +27,10 @@ _pose_model = None
 
 # COCO keypoint indices used by YOLO-pose
 _L_SHOULDER, _R_SHOULDER, _L_HIP, _R_HIP = 5, 6, 11, 12
+_TORSO = [_L_SHOULDER, _R_SHOULDER, _L_HIP, _R_HIP]
+
+HORIZONTAL_DEGREES = 60.0  # torso angle from vertical above which a body counts as lying down
+MIN_KEYPOINT_CONF = 0.3
 
 
 def _get_pose_model(weights: str = "yolov8n-pose.pt"):
@@ -33,30 +42,45 @@ def _get_pose_model(weights: str = "yolov8n-pose.pt"):
     return _pose_model
 
 
-def _torso_center(kpts_xy: np.ndarray, kpts_conf: np.ndarray | None, min_conf: float = 0.3) -> np.ndarray | None:
-    idx = [_L_SHOULDER, _R_SHOULDER, _L_HIP, _R_HIP]
-    pts = kpts_xy[idx]
-    if kpts_conf is not None:
-        ok = kpts_conf[idx] >= min_conf
-        if ok.sum() < 2:
-            return None
-        pts = pts[ok]
-    return pts.mean(axis=0)
+def torso_angle_from_vertical(kpts_xy: np.ndarray) -> float:
+    """Degrees between the shoulder-midpoint -> hip-midpoint vector and the
+    image vertical: ~0 for an upright player, ~90 for one lying down."""
+    shoulders = kpts_xy[[_L_SHOULDER, _R_SHOULDER]].mean(axis=0)
+    hips = kpts_xy[[_L_HIP, _R_HIP]].mean(axis=0)
+    v = hips - shoulders
+    return float(np.degrees(np.arctan2(abs(v[0]), abs(v[1]) + 1e-6)))
 
 
-def compute_pose_scores(
+def grounded_run_scores(
+    samples: list[tuple[float, int]],
+    duration_seconds: float,
+    window_seconds: float,
+) -> dict[tuple[float, float], float]:
+    """From per-sample (timestamp, n_horizontal_bodies), score each window by
+    the longest run of consecutive samples with at least one horizontal body,
+    minus one so an isolated single reading scores 0."""
+    scores: dict[tuple[float, float], float] = {}
+    for start, end in windows(duration_seconds, window_seconds):
+        best = run = 0
+        for ts, n in samples:
+            if ts < start or ts >= end:
+                continue
+            run = run + 1 if n > 0 else 0
+            best = max(best, run)
+        scores[(start, end)] = float(max(0, best - 1))
+    return scores
+
+
+def compute_pose_signals(
     video_path: str,
     window_seconds: float = 2.0,
     duration_seconds: float | None = None,
     sample_fps: float = 5.0,
     weights: str = "yolov8n-pose.pt",
-) -> dict[tuple[float, float], float]:
-    """Return {(window_start, window_end): max_torso_acceleration_in_window}.
+) -> dict[str, dict[tuple[float, float], float]]:
+    """Return {"pose": {...}, "grounded": {...}}, each keyed by window.
 
-    Per tracked player: torso-centre displacement between consecutive
-    samples (velocity, px/s), then the change in that velocity
-    (acceleration). A spike = a sudden deceleration/fall/hit. Raw magnitudes,
-    not yet normalized — `scoring.py` normalizes across the game.
+    Raw magnitudes, not yet normalized — `scoring.py` normalizes across the game.
     """
     model = _get_pose_model(weights)
     fps = video_fps(video_path)
@@ -71,23 +95,33 @@ def compute_pose_scores(
         imgsz=1280,  # see tracking.py — 640 misses most players on 720p footage
     )
 
-    # track_id -> list of (timestamp, torso_center)
+    # track_id -> list of (timestamp, torso_center) for the acceleration signal
     track_history: dict[int, list[tuple[float, np.ndarray]]] = defaultdict(list)
+    # (timestamp, number of bodies lying horizontal) for the grounded signal
+    horizontal_samples: list[tuple[float, int]] = []
     last_timestamp = 0.0
 
     for sample_idx, result in enumerate(results):
         timestamp = sample_idx * stride / fps
         last_timestamp = timestamp
-        boxes, kpts = result.boxes, result.keypoints
-        if boxes is None or boxes.id is None or kpts is None:
+        kpts = result.keypoints
+        if kpts is None or kpts.conf is None or len(kpts) == 0:
+            horizontal_samples.append((timestamp, 0))
             continue
-        ids = boxes.id.int().tolist()
         xy = kpts.xy.cpu().numpy()
-        conf = kpts.conf.cpu().numpy() if kpts.conf is not None else None
-        for i, track_id in enumerate(ids):
-            center = _torso_center(xy[i], conf[i] if conf is not None else None)
-            if center is not None:
-                track_history[track_id].append((timestamp, center))
+        conf = kpts.conf.cpu().numpy()
+        ids = result.boxes.id.int().tolist() if result.boxes is not None and result.boxes.id is not None else None
+
+        n_horizontal = 0
+        for i in range(len(xy)):
+            if conf[i][_TORSO].min() < MIN_KEYPOINT_CONF:
+                continue
+            if torso_angle_from_vertical(xy[i]) > HORIZONTAL_DEGREES:
+                n_horizontal += 1
+            if ids is not None and i < len(ids):
+                center = xy[i][_TORSO].mean(axis=0)
+                track_history[ids[i]].append((timestamp, center))
+        horizontal_samples.append((timestamp, n_horizontal))
 
     # Per-track acceleration events: (timestamp, acceleration_magnitude)
     accel_events: list[tuple[float, float]] = []
@@ -108,8 +142,17 @@ def compute_pose_scores(
     if duration_seconds is None:
         duration_seconds = last_timestamp
 
-    scores: dict[tuple[float, float], float] = {}
+    pose_scores: dict[tuple[float, float], float] = {}
     for start, end in windows(duration_seconds, window_seconds):
         values = [a for ts, a in accel_events if start <= ts < end]
-        scores[(start, end)] = max(values) if values else 0.0
-    return scores
+        pose_scores[(start, end)] = max(values) if values else 0.0
+
+    return {
+        "pose": pose_scores,
+        "grounded": grounded_run_scores(horizontal_samples, duration_seconds, window_seconds),
+    }
+
+
+def compute_pose_scores(video_path: str, **kwargs) -> dict[tuple[float, float], float]:
+    """Backwards-compatible wrapper returning only the acceleration signal."""
+    return compute_pose_signals(video_path, **kwargs)["pose"]

@@ -13,7 +13,7 @@ from db.models import Candidate, ClipSource, SessionLocal
 from stage0_ingestion.clock_sync import ClockSyncTable
 from stage1_candidates.audio import compute_audio_scores
 from stage1_candidates.motion import compute_motion_scores
-from stage1_candidates.pose import compute_pose_scores
+from stage1_candidates.pose import compute_pose_signals
 from stage1_candidates.scoring import CandidateWindow, score_windows, threshold_and_merge
 from stage1_candidates.tracking import compute_density_scores, track_players
 
@@ -22,7 +22,7 @@ SignalMap = dict[tuple[float, float], float]
 
 # Bump whenever a signal extractor changes in a way that alters its output
 # (model, resolution, sampling), so stale cached signals aren't reused.
-SIGNAL_VERSION = "v2-imgsz1280"
+SIGNAL_VERSION = "v3-grounded"
 
 
 def _signal_cache_path(video_path: str, window_seconds: float) -> Path:
@@ -47,16 +47,18 @@ def compute_signals(video_path: str, window_seconds: float, use_cache: bool = Tr
     cache = _signal_cache_path(video_path, window_seconds)
     if use_cache and cache.exists():
         data = json.loads(cache.read_text())
-        return {name: _load(data[name]) for name in ("motion", "density", "pose", "audio")}
+        return {name: _load(data.get(name)) for name in ("motion", "density", "pose", "grounded", "audio")}
 
     duration = probe_duration_seconds(video_path)
     frame_tracks = track_players(video_path)
+    pose_signals = compute_pose_signals(video_path, window_seconds=window_seconds, duration_seconds=duration)
     signals: dict[str, SignalMap | None] = {
         "motion": compute_motion_scores(video_path, window_seconds=window_seconds, duration_seconds=duration),
         "density": compute_density_scores(
             video_path, frame_tracks, window_seconds=window_seconds, duration_seconds=duration
         ),
-        "pose": compute_pose_scores(video_path, window_seconds=window_seconds, duration_seconds=duration),
+        "pose": pose_signals["pose"],
+        "grounded": pose_signals["grounded"],
     }
     try:
         signals["audio"] = compute_audio_scores(
@@ -78,7 +80,9 @@ def detect_candidates_for_video(
     and return the merged, thresholded candidate windows."""
     window_seconds = window_seconds or settings.candidate_window_seconds
     sig = compute_signals(video_path, window_seconds)
-    windows = score_windows(sig["motion"], sig["density"], sig["pose"], sig["audio"])
+    windows = score_windows(
+        sig["motion"], sig["density"], sig["pose"], sig["audio"], grounded_scores=sig.get("grounded")
+    )
     return threshold_and_merge(windows)
 
 
@@ -114,6 +118,7 @@ def detect_and_persist_candidates(
                 density_score=window.density_score,
                 pose_score=window.pose_score,
                 audio_score=window.audio_score,
+                grounded_score=window.grounded_score,
             )
             session.add(row)
             rows.append(row)
