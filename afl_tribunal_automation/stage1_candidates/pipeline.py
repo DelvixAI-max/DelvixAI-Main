@@ -29,9 +29,7 @@ def detect_candidates_for_video(
     density_scores = compute_density_scores(
         video_path, frame_tracks, window_seconds=window_seconds, duration_seconds=duration
     )
-    pose_scores = compute_pose_scores(
-        video_path, frame_tracks, window_seconds=window_seconds, duration_seconds=duration
-    )
+    pose_scores = compute_pose_scores(video_path, window_seconds=window_seconds, duration_seconds=duration)
 
     windows = score_windows(motion_scores, density_scores, pose_scores)
     return threshold_and_merge(windows)

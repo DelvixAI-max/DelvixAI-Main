@@ -24,6 +24,9 @@ def compute_motion_scores(
     whole video. Scores are NOT yet normalized to 0-1 — `scoring.py` does
     that once all signals are computed, so relative magnitude across the
     whole game is preserved.
+
+    Frames are read sequentially (grab + retrieve every Nth frame) rather
+    than seeked, which is an order of magnitude faster on long h264 files.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -32,32 +35,29 @@ def compute_motion_scores(
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     duration = duration_seconds if duration_seconds is not None else (frame_count / fps if fps else 0.0)
-    step_seconds = 1.0 / sample_fps
+    stride = max(1, int(round(fps / sample_fps)))
 
     prev_gray = None
     per_sample: list[tuple[float, float]] = []  # (timestamp, magnitude)
 
-    t = 0.0
-    while t < duration:
-        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
-        ok, frame = cap.read()
-        if not ok:
+    frame_index = 0
+    while True:
+        if not cap.grab():
             break
+        if frame_index % stride == 0:
+            ok, frame = cap.retrieve()
+            if ok:
+                scale = downscale_width / frame.shape[1] if frame.shape[1] > downscale_width else 1.0
+                if scale != 1.0:
+                    frame = cv2.resize(frame, None, fx=scale, fy=scale)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        scale = downscale_width / frame.shape[1] if frame.shape[1] > downscale_width else 1.0
-        if scale != 1.0:
-            frame = cv2.resize(frame, None, fx=scale, fy=scale)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        if prev_gray is not None:
-            flow = cv2.calcOpticalFlowFarneback(
-                prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0
-            )
-            magnitude = float(np.linalg.norm(flow, axis=2).mean())
-            per_sample.append((t, magnitude))
-
-        prev_gray = gray
-        t += step_seconds
+                if prev_gray is not None:
+                    flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+                    magnitude = float(np.linalg.norm(flow, axis=2).mean())
+                    per_sample.append((frame_index / fps, magnitude))
+                prev_gray = gray
+        frame_index += 1
 
     cap.release()
 

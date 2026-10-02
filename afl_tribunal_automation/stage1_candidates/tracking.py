@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import cv2
 import numpy as np
 
 from common.time_utils import windows
@@ -34,14 +35,24 @@ class Detection:
 
 @dataclass
 class FrameTracks:
+    frame_index: int  # index in the source video (not the sampled sequence)
     timestamp: float
     detections: list[Detection]
 
 
+def video_fps(video_path: str) -> float:
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    cap.release()
+    return fps
+
+
 def track_players(video_path: str, sample_fps: float = 5.0, weights: str = "yolov8n.pt") -> list[FrameTracks]:
-    """Run YOLO+ByteTrack over the video, sampled at `sample_fps`, keeping
-    only the 'person' class (COCO class 0)."""
+    """Run YOLO+ByteTrack over the video, sampled at ~`sample_fps` via
+    vid_stride, keeping only the 'person' class (COCO class 0)."""
     model = _get_model(weights)
+    fps = video_fps(video_path)
+    stride = max(1, int(round(fps / sample_fps)))
 
     results = model.track(
         source=video_path,
@@ -49,15 +60,14 @@ def track_players(video_path: str, sample_fps: float = 5.0, weights: str = "yolo
         tracker="bytetrack.yaml",
         stream=True,
         verbose=False,
-        vid_stride=1,
+        vid_stride=stride,
+        imgsz=640,
     )
 
     frame_tracks: list[FrameTracks] = []
-    fps_guess = None
-    for frame_idx, result in enumerate(results):
-        if fps_guess is None:
-            fps_guess = getattr(result, "speed", {}).get("fps", None) or 25.0
-        timestamp = frame_idx / fps_guess if fps_guess else float(frame_idx)
+    for sample_idx, result in enumerate(results):
+        frame_index = sample_idx * stride
+        timestamp = frame_index / fps
 
         detections: list[Detection] = []
         boxes = result.boxes
@@ -67,7 +77,7 @@ def track_players(video_path: str, sample_fps: float = 5.0, weights: str = "yolo
             for track_id, box in zip(ids, xyxy):
                 detections.append(Detection(track_id=track_id, bbox_xyxy=tuple(box)))
 
-        frame_tracks.append(FrameTracks(timestamp=timestamp, detections=detections))
+        frame_tracks.append(FrameTracks(frame_index=frame_index, timestamp=timestamp, detections=detections))
 
     return frame_tracks
 
@@ -78,9 +88,9 @@ def _centroid(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
 
 
 def _max_cluster_size(detections: list[Detection], cluster_radius_px: float) -> int:
-    """Largest set of players all mutually within cluster_radius_px of at
-    least one other player in the set (simple greedy density estimate, not
-    a true clustering algorithm — good enough as a triage signal)."""
+    """Largest number of players within cluster_radius_px of any one player
+    (simple greedy density estimate, not a true clustering algorithm — good
+    enough as a triage signal)."""
     if not detections:
         return 0
     points = np.array([_centroid(d.bbox_xyxy) for d in detections])

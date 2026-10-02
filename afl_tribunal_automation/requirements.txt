@@ -8,8 +8,8 @@ easyocr>=1.7.1
 
 # Stage 1: candidate detection
 scenedetect[opencv]>=0.6.4
-ultralytics>=8.2.0
-mediapipe>=0.10.14
+ultralytics>=8.2.0   # detection (yolov8n) + pose (yolov8n-pose)
+lap>=0.5.12          # ByteTrack association
 
 # Persistence
 sqlalchemy>=2.0.30
