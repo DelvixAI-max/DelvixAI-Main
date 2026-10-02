@@ -31,6 +31,30 @@ Result on the same quarter: **19 candidates, 52 s flagged (2.9%)**. Two of
 the four regroup/stoppage windows dropped out; the one with real jostling
 (≈ Q1 19:00) still ranks first, which is the right outcome.
 
+## Audio signal and relative threshold
+
+Adding crowd/whistle loudness *rise* as a fourth signal exposed that the
+fixed 0.5 threshold was fragile: diluting each window's weighted sum
+collapsed the quarter to 2 candidates. Selection is now the top 4% of
+windows (absolute threshold kept only as a floor), and raw per-window
+signals are cached so re-scoring takes seconds.
+
+The loudest audio rise of the quarter (+17.7 dB at 1170 s) was a pack
+contest with players on the ground that the visual signals had under-
+scored — but the reaction landed 6 s before the visual peak, in a
+different window. Aligning audio backwards by up to two windows fixed it.
+
+Final Q1 result (all four signals, top 4%): **26 candidates, 78 s (4.4%)**.
+The pack contest ranks #2; the one jostling regroup is still in; the
+post-goal walk-back, the goal and the static set shot are out.
+
+| version | candidates | seconds |
+|---|---|---|
+| baseline (3 signals, fixed 0.5) | 53 | 202 |
+| pan-compensated + gated density | 19 | 52 |
+| + audio, fixed 0.5 (broken) | 2 | 4 |
+| + audio, top 4%, lag-aligned | 26 | 78 |
+
 ## Open questions
 
 - Need a quarter containing a known incident (reported or missed) to measure
