@@ -27,6 +27,10 @@ class Settings:
         )
     )
 
+    # "s3" (default) or "local" — local keeps clips on disk under local_storage_dir
+    storage_backend: str = field(default_factory=lambda: os.environ.get("STORAGE_BACKEND", "s3"))
+    local_storage_dir: str = field(default_factory=lambda: os.environ.get("LOCAL_STORAGE_DIR", "./storage"))
+
     s3_endpoint_url: str = field(default_factory=lambda: os.environ.get("S3_ENDPOINT_URL", ""))
     s3_bucket: str = field(default_factory=lambda: os.environ.get("S3_BUCKET", "afl-tribunal-clips"))
     s3_access_key: str = field(default_factory=lambda: os.environ.get("S3_ACCESS_KEY", ""))

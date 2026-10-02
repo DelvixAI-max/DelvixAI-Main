@@ -28,3 +28,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# AFL pipeline local run artefacts
+afl_tribunal_automation/afl_tribunal.db
+afl_tribunal_automation/storage/
