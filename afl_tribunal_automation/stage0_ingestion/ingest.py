@@ -3,10 +3,17 @@ quarter of a game."""
 
 from __future__ import annotations
 
+from common.ffmpeg_utils import probe_duration_seconds
 from db.models import ClockSyncSegment as ClockSyncSegmentRow
 from db.models import Game, SessionLocal
-from stage0_ingestion.clock_ocr import read_clock_track
 from stage0_ingestion.clock_sync import ClockSyncTable
+
+
+def read_clock_track(video_path, crop_box):
+    # Imported lazily: the OCR stack (cv2/easyocr) isn't needed in linear mode.
+    from stage0_ingestion.clock_ocr import read_clock_track as _read
+
+    return _read(video_path, crop_box)
 
 
 def sync_game_clock(game_id: int) -> dict[int, ClockSyncTable]:
@@ -18,18 +25,22 @@ def sync_game_clock(game_id: int) -> dict[int, ClockSyncTable]:
         game = session.get(Game, game_id)
         if game is None:
             raise ValueError(f"No game with id={game_id}")
-        if not game.clock_crop_box:
+        linear = game.clock_mode == "linear"
+        if not linear and not game.clock_crop_box:
             raise ValueError(
-                f"Game {game_id} has no clock_crop_box configured — "
-                "set games.clock_crop_box to the broadcast's on-screen clock region."
+                f"Game {game_id} has no clock_crop_box configured — set it to the "
+                "broadcast's on-screen clock region, or use clock_mode='linear' for "
+                "footage with no on-screen clock."
             )
 
-        crop_box = (
-            game.clock_crop_box["x"],
-            game.clock_crop_box["y"],
-            game.clock_crop_box["w"],
-            game.clock_crop_box["h"],
-        )
+        crop_box = None
+        if not linear:
+            crop_box = (
+                game.clock_crop_box["x"],
+                game.clock_crop_box["y"],
+                game.clock_crop_box["w"],
+                game.clock_crop_box["h"],
+            )
 
         # Clear any previous sync for this game so re-runs don't duplicate.
         for existing in list(game.clock_sync_segments):
@@ -39,8 +50,12 @@ def sync_game_clock(game_id: int) -> dict[int, ClockSyncTable]:
         tables: dict[int, ClockSyncTable] = {}
         for quarter_str, video_path in sorted(game.broadcast_video_paths.items()):
             quarter = int(quarter_str)
-            samples = read_clock_track(video_path, crop_box)
-            table = ClockSyncTable.from_samples(samples)
+            if linear:
+                offset = float(game.quarter_start_offsets.get(quarter_str, 0.0))
+                table = ClockSyncTable.linear(probe_duration_seconds(video_path), offset)
+            else:
+                samples = read_clock_track(video_path, crop_box)
+                table = ClockSyncTable.from_samples(samples)
             tables[quarter] = table
 
             for segment in table.segments:

@@ -23,7 +23,17 @@ from db.models import Candidate, Clip, Game, SessionLocal
 
 
 def cmd_add_game(args: argparse.Namespace) -> None:
-    x, y, w, h = (int(v) for v in args.clock_box.split(","))
+    if args.clock_mode == "ocr" and not args.clock_box:
+        raise SystemExit("--clock-box is required with --clock-mode ocr (or use --clock-mode linear)")
+    clock_box = {}
+    if args.clock_box:
+        x, y, w, h = (int(v) for v in args.clock_box.split(","))
+        clock_box = {"x": x, "y": y, "w": w, "h": h}
+
+    start_offsets = {}
+    for item in args.quarter_start_offset or []:
+        q, secs = item.split("=")
+        start_offsets[q] = float(secs)
 
     broadcast_paths = {}
     for quarter, path in ((1, args.q1), (2, args.q2), (3, args.q3), (4, args.q4)):
@@ -45,7 +55,9 @@ def cmd_add_game(args: argparse.Namespace) -> None:
             ground=args.ground or "",
             broadcast_video_paths=broadcast_paths,
             coaches_angle_video_paths=coaches_paths,
-            clock_crop_box={"x": x, "y": y, "w": w, "h": h},
+            clock_mode=args.clock_mode,
+            clock_crop_box=clock_box,
+            quarter_start_offsets=start_offsets,
         )
         session.add(game)
         session.commit()
@@ -183,7 +195,11 @@ def main() -> None:
     p.add_argument("--coaches-q2", type=str, default=None)
     p.add_argument("--coaches-q3", type=str, default=None)
     p.add_argument("--coaches-q4", type=str, default=None)
-    p.add_argument("--clock-box", type=str, required=True, help="x,y,w,h pixel crop box for the on-screen clock")
+    p.add_argument("--clock-mode", choices=["ocr", "linear"], default="ocr",
+                   help="ocr: read the on-screen clock; linear: no on-screen clock, use video time minus quarter start")
+    p.add_argument("--clock-box", type=str, default=None, help="x,y,w,h pixel crop box for the on-screen clock (ocr mode)")
+    p.add_argument("--quarter-start-offset", action="append", metavar="Q=SECONDS",
+                   help="linear mode: seconds into the quarter video when play starts, e.g. 1=14.5 (repeatable)")
     p.set_defaults(func=cmd_add_game)
 
     p = subparsers.add_parser("preview-frame", help="Extract one frame to help find the clock's crop box")

@@ -118,6 +118,20 @@ class ClockSyncTable:
     def from_samples(cls, samples: list[ClockSample]) -> "ClockSyncTable":
         return cls(build_segments(samples))
 
+    @classmethod
+    def linear(cls, duration_seconds: float, start_offset_seconds: float = 0.0) -> "ClockSyncTable":
+        """Fallback for footage with no on-screen clock (e.g. a fixed-camera
+        ground recording): game clock = video time - offset to first bounce.
+        Correct whenever the recording runs continuously through stoppages,
+        which is the usual case for a single-camera match recording."""
+        segments = []
+        second = 0
+        while start_offset_seconds + second < duration_seconds:
+            b = start_offset_seconds + second
+            segments.append(ClockSyncSegment(second, b, b))
+            second += 1
+        return cls(segments)
+
     def broadcast_to_game(self, broadcast_second: float) -> int | None:
         """What did the on-screen clock read at this point in the video?"""
         if not self.segments:

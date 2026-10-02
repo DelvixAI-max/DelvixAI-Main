@@ -68,8 +68,13 @@ class Game(Base):
     # Optional wide "coaches' angle" footage, same keying, for off-ball incidents
     coaches_angle_video_paths: Mapped[dict] = mapped_column(JSON, default=dict)
 
+    # "ocr": read the on-screen clock (needs clock_crop_box).
+    # "linear": no on-screen clock — game clock = video time - quarter start offset.
+    clock_mode: Mapped[str] = mapped_column(String(16), default="ocr")
     # Broadcast clock crop box, e.g. {"x": 1700, "y": 40, "w": 160, "h": 50}
     clock_crop_box: Mapped[dict] = mapped_column(JSON, default=dict)
+    # For linear mode: seconds into each quarter's video at which play starts, {"1": 12.5, ...}
+    quarter_start_offsets: Mapped[dict] = mapped_column(JSON, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
