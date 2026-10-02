@@ -21,7 +21,13 @@ Same single-camera 720p recording as Q1. 30:48. Quarter clock = video time − 4
 |---|---|---|---|---|---|---|---|---|
 | 4 signals, imgsz 640 | 26 | 76 | ✗ (rank 694/925) | ✗ | ✓ #1 | ✓ | ✓ #3 | ✗ |
 | + imgsz 1280 | 25 | 78 | ✗ (rank 578/925) | ✗ | ✓ #1 | ✓ | ✓ | ✗ |
-| + grounded signal | *pending* | | | | | | | |
+| + grounded (run-based) | 26 | 78 | ✗ (rank 429) | ✗ (rank 75, g=0) | ✓ #1 | ✓ | ✓ | **✓ #7, g=1.0** |
+| + grounded (count, padded, cached samples) | *pending* | | | | | | | |
+
+The grounded signal also surfaced a moment nobody had listed: **14:08 (852 s)** —
+a player tackled, landing flat on his side, taking 4–5 s to get up while
+play moves on. Added to the reel for the reviewer. 474 s (a tackle pile) also
+fired; ordinary football, but the right class for a triage filter.
 
 ## What went wrong, in order of importance
 
@@ -44,8 +50,15 @@ no motion at all. Neither registers.
 Torso **orientation** (shoulder→hip angle from vertical) does: every
 pack-over-player incident shows a body at 57–89° for 2–5 consecutive samples,
 while ordinary play produces only isolated single readings just over 55°
-(sprinters leaning). The `grounded` signal = longest run of consecutive
-samples with a horizontal body, minus one (so singletons score 0).
+(sprinters leaning).
+
+First version scored the longest *run* of consecutive horizontal samples.
+That caught the dense events (26:22: 9 of 10 samples) but scored 17:28 at 0:
+a body inside a pack flickers in and out of detection (1–3 readings per
+window, non-consecutive), and the result also depended on where the 2 s
+window boundary fell. Now: *count* of samples with a horizontal body over a
+0.6 s-padded window, minus one. Raw per-sample readings are cached so this
+can be re-tuned in seconds.
 
 ### 3. The sling moment itself is occluded (not fixable from this footage)
 
