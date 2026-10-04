@@ -109,6 +109,19 @@ output means.
 |---|---|---|
 | 2:21 | 145 | Late contact: kicker bumped to ground after disposal (league-identified; detector #2, review miss) |
 
+### 6. Re-reviewing every dismissal at 5 fps
+
+After §5, all 18 previously dismissed candidates were re-reviewed at 5 fps
+over 4 s around the peak. Four changed from "ordinary play" to "reviewer
+should decide" (30:17 contact with grounded player; 8:47, 28:09 heavy
+tackle landings; 7:55 player landing on grounded opponent). None is as
+strong as the main eight, but at 1 fps all four had been indistinguishable
+from routine tackles. 14 of 18 stayed dismissed.
+
+Takeaway for the product: the review stage's sampling density is a
+first-order parameter, on a par with the detector's threshold. 1 fps is
+not enough for anything that happens in under a second.
+
 ## Still open
 
 - Confirm with the re-run whether `grounded` lifts 17:28 and 26:22 into the
