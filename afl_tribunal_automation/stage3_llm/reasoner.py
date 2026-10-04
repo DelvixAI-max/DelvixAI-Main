@@ -41,11 +41,18 @@ def assess_clip(
     end_seconds: float,
     context: dict | None = None,
     frame_count: int = 8,
+    focus_center_seconds: float | None = None,
 ) -> OffenceAssessment:
     """Sample frames from the clip window and ask Claude for a structured
     OffenceAssessment. `context` is free-form metadata (game, quarter,
-    game-clock time, heuristic scores) included as text alongside the frames."""
-    frames_b64 = sample_frames_base64(video_path, start_seconds, end_seconds, frame_count)
+    game-clock time, heuristic scores) included as text alongside the frames.
+
+    `focus_center_seconds` (relative to the clip start) adds a dense 4 fps
+    burst around the peak moment on top of the context frames — a late bump
+    and a tackle are indistinguishable at 1 fps."""
+    frames_b64 = sample_frames_base64(
+        video_path, start_seconds, end_seconds, frame_count, focus_center_seconds=focus_center_seconds
+    )
 
     context = context or {}
     context_lines = [f"- {key}: {value}" for key, value in context.items()]
@@ -94,10 +101,14 @@ def assess_and_persist(candidate_id: int, clip_id: int) -> LLMAssessment:
         # S3_PUBLIC_BASE_URL points at something ffmpeg can stream from
         # (a public/presigned URL, or local MinIO). For a private bucket
         # with no public URL, swap this for a download-to-tempfile step.
+        clip_length = clip.broadcast_end_seconds - clip.broadcast_start_seconds
+        peak = candidate.peak_broadcast_seconds
+        focus = (peak - clip.broadcast_start_seconds) if peak is not None else clip_length / 2
         assessment = assess_clip(
             video_path=clip.url,
             start_seconds=0.0,
-            end_seconds=clip.broadcast_end_seconds - clip.broadcast_start_seconds,
+            end_seconds=clip_length,
+            focus_center_seconds=max(0.0, min(clip_length, focus)),
             context=context,
         )
 

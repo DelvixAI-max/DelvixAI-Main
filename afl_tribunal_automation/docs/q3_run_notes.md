@@ -91,6 +91,24 @@ higher-resolution feed or a second camera angle.
 A frame every 2 s skipped the 0.6 s sling entirely; it looked like an ordinary
 tackle. Recorded here as a warning about how brief this class of incident is.
 
+### 5. The review stage can throw away a correct detection
+
+**Q3 2:21 (145 s)**: black #13 kicks; an opponent runs through him after
+disposal and takes him to ground. The detector ranked this window **#2 in
+the quarter** (motion 0.84, audio 0.68). It was then dismissed at review as
+an ordinary tackle, because the review used 8 frames at 1 fps across 8 s —
+at that density "late bump after a kick" and "tackle" look identical.
+
+Stage 3 was sending Claude the same 8 evenly spaced frames. Now: context
+frames across the clip **plus a 12-frame burst at ~4 fps centred on the
+detector's peak moment**. Fixing the detector would have done nothing here;
+the pipeline's weakest link was the stage that decides what the detector's
+output means.
+
+| Q3 time | Video s | Incident |
+|---|---|---|
+| 2:21 | 145 | Late contact: kicker bumped to ground after disposal (league-identified; detector #2, review miss) |
+
 ## Still open
 
 - Confirm with the re-run whether `grounded` lifts 17:28 and 26:22 into the
