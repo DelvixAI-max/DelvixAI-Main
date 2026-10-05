@@ -63,3 +63,22 @@ post-goal walk-back, the goal and the static set shot are out.
   the umpire-report → clip mapping (Stage 4) can be validated.
 - Jersey-number identification is not implemented; the model's player
   attribution will be weak on 720p ground footage.
+
+## Corrected re-run (after Q3 findings)
+
+Q1 was re-run with every correction from Q3 applied: native 1280 px
+detection, grounded-body signal, 6% cut, audio lag alignment, and review
+at 5 fps around each candidate's peak.
+
+| | original | corrected |
+|---|---|---|
+| candidates | 26 | 38 |
+| seconds flagged | 78 | 116 |
+| clips to reviewer | 1 | 6 |
+
+The original Q1 verdict ("nothing reportable, one borderline regroup") was
+reached at 1 fps and is withdrawn. At 5 fps, five more candidates show a
+player on the ground with opponents over him (20:02, 24:18, 23:54, 5:36,
+19:48). None is as clear as the Q3 incidents, and all may be fair tackles —
+but that is the reviewer's call, not the tool's. All six were in the
+detector's list; the correction was entirely in the review stage.
